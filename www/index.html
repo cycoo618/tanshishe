@@ -432,7 +432,7 @@ function recordGame(name,sc){
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentUser=null;
-let snake,food,dir,nextDir;
+let snake,food,dir,dirQueue=[];
 let score,highScore;
 let gameState='home';
 let particles=[],floatTexts=[];
@@ -576,7 +576,7 @@ function startGame(){
 function initGame(){
   const mid=Math.floor(GRID/2);
   snake=[{x:mid,y:mid},{x:mid-1,y:mid},{x:mid-2,y:mid}];
-  dir={x:1,y:0}; nextDir={x:1,y:0};
+  dir={x:1,y:0}; dirQueue=[];
   score=0; particles=[]; floatTexts=[]; deathFlash=0;
   placeFood(); updateScoreEl(); updatePips();
 }
@@ -604,7 +604,7 @@ function updatePips(){
 function getSpeed(){ return Math.max(MIN_SPEED,BASE_SPEED-(score/10)*SPEED_STEP); }
 
 function step(){
-  dir={...nextDir};
+  if(dirQueue.length>0) dir=dirQueue.shift();
   const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
   if(h.x<0||h.x>=GRID||h.y<0||h.y>=GRID||snake.some(s=>s.x===h.x&&s.y===h.y)){endGame();return;}
   snake.unshift(h);
@@ -613,6 +613,8 @@ function step(){
     updateScoreEl(); updatePips();
     spawnParticles(food.x,food.y); spawnFloat(food.x,food.y,'+10'); placeFood();
   } else { snake.pop(); }
+  // 队列里还有待执行的方向，下一帧立即触发下一步
+  if(dirQueue.length>0) lastStep=performance.now()-getSpeed();
 }
 
 function endGame(){
@@ -780,25 +782,49 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter'){if(gameState==='new'){confirmNewPlayer();return;}if(gameState==='over'){startGame();return;}}
   if(gameState==='new'||gameState==='home')return;
   const d=KEYS[e.key];if(!d)return;e.preventDefault();
-  if(gameState!=='playing')return;if(d.x===-dir.x&&d.y===-dir.y)return;nextDir=d;
+  if(gameState!=='playing')return;
+  queueDir(d.x,d.y);
 });
 
-function applyDir(dx,dy){if(gameState!=='playing')return;if(dx===-dir.x&&dy===-dir.y)return;nextDir={x:dx,y:dy};}
+function nudgeStep(){
+  const now=performance.now();
+  if(now-lastStep>30) lastStep=now-getSpeed();
+}
+
+// 新输入与队列末尾比较，最多缓存2步，支持U形转弯
+function queueDir(dx,dy){
+  if(gameState!=='playing')return;
+  const last=dirQueue.length>0?dirQueue[dirQueue.length-1]:dir;
+  if(dx===-last.x&&dy===-last.y)return; // 与即将执行的方向相反，丢弃
+  if(dx===last.x&&dy===last.y)return;   // 重复方向，丢弃
+  if(dirQueue.length<2)dirQueue.push({x:dx,y:dy});
+  nudgeStep();
+}
+
+function applyDir(dx,dy){queueDir(dx,dy);}
 document.getElementById('dUp').addEventListener('click',()=>applyDir(0,-1));
 document.getElementById('dDown').addEventListener('click',()=>applyDir(0,1));
 document.getElementById('dLeft').addEventListener('click',()=>applyDir(-1,0));
 document.getElementById('dRight').addEventListener('click',()=>applyDir(1,0));
 document.getElementById('dPause').addEventListener('click',()=>{if(gameState==='playing'||gameState==='paused')togglePause();});
 
-let touchStart=null;
-canvas.addEventListener('touchstart',e=>{touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
-canvas.addEventListener('touchend',e=>{
-  if(!touchStart)return;
-  const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;
-  touchStart=null;
-  if(Math.abs(dx)>Math.abs(dy)){if(Math.abs(dx)>20)applyDir(dx>0?1:-1,0);}
-  else{if(Math.abs(dy)>20)applyDir(0,dy>0?1:-1);}
+let lastTouch=null;
+canvas.addEventListener('touchstart',e=>{
+  lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
 },{passive:true});
+// 每次触发后从当前位置重新计算，不用抬手就能连续多次转向
+canvas.addEventListener('touchmove',e=>{
+  if(!lastTouch)return;
+  const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
+  const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
+  const threshold=14;
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(Math.abs(dx)>threshold){applyDir(dx>0?1:-1,0);lastTouch={x:cx,y:cy};}
+  } else {
+    if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};}
+  }
+},{passive:true});
+canvas.addEventListener('touchend',e=>{lastTouch=null;},{passive:true});
 
 document.getElementById('newPlayerBtn').addEventListener('click',showNewPlayer);
 document.getElementById('confirmNewBtn').addEventListener('click',confirmNewPlayer);
