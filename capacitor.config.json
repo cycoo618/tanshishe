@@ -1,0 +1,15 @@
+{
+  "appId": "com.serpent.neon",
+  "appName": "Serpent",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "automatic",
+    "scrollEnabled": false,
+    "backgroundColor": "#050510"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
