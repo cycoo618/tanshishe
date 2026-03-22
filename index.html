@@ -294,6 +294,25 @@ canvas { display: block; }
 @media (max-width: 600px), (pointer: coarse) { .mobile-controls { display: grid; } }
 
 .hint { font-size: 8px; letter-spacing: 2px; color: var(--dim); text-align: center; line-height: 1.8; }
+
+/* ── Control mode cards ── */
+.ctrl-cards { display: flex; gap: 12px; width: 100%; }
+.ctrl-card {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px 10px;
+  cursor: pointer; transition: all 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ctrl-card:hover, .ctrl-card.selected {
+  border-color: var(--cyan);
+  background: rgba(0,245,212,0.06);
+  box-shadow: 0 0 20px rgba(0,245,212,0.12);
+}
+.ctrl-card-icon { font-size: 36px; line-height: 1; }
+.ctrl-card-name { font-size: 12px; font-weight: 700; letter-spacing: 3px; color: var(--text); }
+.ctrl-card-desc { font-size: 8px; letter-spacing: 1px; color: var(--dim); text-align: center; }
 </style>
 </head>
 <body>
@@ -367,6 +386,23 @@ canvas { display: block; }
       <div class="lb-table" id="lbTable"></div>
       <button class="btn dim" id="lbCloseBtn">BACK</button>
     </div>
+
+    <!-- ⑤ Control mode selection -->
+    <div class="overlay hidden" id="ctrlOverlay">
+      <div class="ov-title">HOW TO PLAY</div>
+      <div class="ctrl-cards">
+        <div class="ctrl-card" id="cardDpad">
+          <div class="ctrl-card-icon">🕹️</div>
+          <div class="ctrl-card-name">D-PAD</div>
+          <div class="ctrl-card-desc">TAP DIRECTION<br>BUTTONS</div>
+        </div>
+        <div class="ctrl-card" id="cardSwipe">
+          <div class="ctrl-card-icon">👆</div>
+          <div class="ctrl-card-name">SWIPE</div>
+          <div class="ctrl-card-desc">SWIPE ANYWHERE<br>ON SCREEN</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="speed-row">
@@ -379,7 +415,7 @@ canvas { display: block; }
     </div>
   </div>
 
-  <div class="mobile-controls">
+  <div class="mobile-controls" id="mobileControls">
     <div class="dpad-btn empty"></div>
     <div class="dpad-btn" id="dUp">▲</div>
     <div class="dpad-btn empty"></div>
@@ -389,6 +425,11 @@ canvas { display: block; }
     <div class="dpad-btn empty"></div>
     <div class="dpad-btn" id="dDown">▼</div>
     <div class="dpad-btn empty"></div>
+  </div>
+  <!-- Gesture zone placeholder (shown in swipe mode, same size as dpad) -->
+  <div id="gestureZone" style="display:none;width:160px;height:160px;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1px dashed var(--border);border-radius:10px;color:var(--dim);font-size:8px;letter-spacing:3px;">
+    <div style="font-size:22px;opacity:0.2;letter-spacing:6px;">↑ ↓ ← →</div>
+    <span>SWIPE HERE</span>
   </div>
 
   <div class="hint">ARROWS / WASD — MOVE &nbsp;·&nbsp; SPACE — PAUSE</div>
@@ -440,10 +481,15 @@ function resize() {
   cellSize  = Math.max(14, Math.floor(max/GRID));
   boardSize = cellSize * GRID;
   canvas.width = boardSize; canvas.height = boardSize;
+  // Gesture zone: fill remaining vertical space below canvas
+  const gz = document.getElementById('gestureZone');
+  const gzH = Math.max(160, window.innerHeight - boardSize - 180);
+  gz.style.width = boardSize + 'px';
+  gz.style.height = gzH + 'px';
 }
 
 // ─── Screens ─────────────────────────────────────────────────────────────────
-const screens = ['homeOverlay','newPlayerOverlay','gameOverOverlay','lbOverlay'];
+const screens = ['homeOverlay','newPlayerOverlay','gameOverOverlay','lbOverlay','ctrlOverlay'];
 function showOnly(id) {
   screens.forEach(s => {
     const el = document.getElementById(s);
@@ -533,7 +579,15 @@ function selectUser(name) {
   document.getElementById('playerName').textContent = name;
   document.getElementById('playerTag').style.display = 'flex';
   document.getElementById('highscore').textContent = highScore;
-  startGame();
+  showCtrlSelection();
+}
+
+function showCtrlSelection() {
+  resize();
+  document.getElementById('cardDpad').classList.toggle('selected', controlMode==='dpad');
+  document.getElementById('cardSwipe').classList.toggle('selected', controlMode==='swipe');
+  showOnly('ctrlOverlay');
+  drawStaticBg();
 }
 
 // ─── Game ────────────────────────────────────────────────────────────────────
@@ -819,15 +873,27 @@ document.getElementById('dLeft').addEventListener('click',  ()=>applyDir(-1,0));
 document.getElementById('dRight').addEventListener('click', ()=>applyDir(1,0));
 document.getElementById('dPause').addEventListener('click', ()=>{if(gameState==='playing'||gameState==='paused')togglePause();});
 
-// Touch swipe — 不用抬手可连续触发多次转向
+// ─── Control mode ─────────────────────────────────────────────────────────────
+let controlMode = localStorage.getItem('serpent_ctrl') || 'dpad';
+
+function setControlMode(mode) {
+  controlMode = mode;
+  localStorage.setItem('serpent_ctrl', mode);
+  document.getElementById('mobileControls').style.display = mode==='dpad' ? '' : 'none';
+  document.getElementById('gestureZone').style.display = mode==='swipe' ? 'flex' : 'none';
+}
+
+document.getElementById('cardDpad').addEventListener('click', ()=>{ setControlMode('dpad'); startGame(); });
+document.getElementById('cardSwipe').addEventListener('click',()=>{ setControlMode('swipe'); startGame(); });
+
+// Touch swipe — document-level; full-screen in swipe mode, canvas-only in dpad mode
 let lastTouch=null;
-canvas.addEventListener('touchstart',e=>{
-  e.preventDefault();
+document.addEventListener('touchstart',e=>{
   lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
-},{passive:false});
-canvas.addEventListener('touchmove',e=>{
+},{passive:true});
+document.addEventListener('touchmove',e=>{
   if(!lastTouch)return;
-  e.preventDefault();
+  if(controlMode==='dpad' && !e.target.closest('#game'))return;
   const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
   const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
   const threshold=14;
@@ -836,8 +902,8 @@ canvas.addEventListener('touchmove',e=>{
   } else {
     if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};}
   }
-},{passive:false});
-canvas.addEventListener('touchend',e=>{lastTouch=null;},{passive:false});
+},{passive:true});
+document.addEventListener('touchend',()=>{lastTouch=null;},{passive:true});
 
 // Button wiring
 document.getElementById('newPlayerBtn').addEventListener('click', showNewPlayer);
@@ -882,6 +948,7 @@ function drawStaticBg(){
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
 resize();
+setControlMode(controlMode);
 drawStaticBg();
 showHome();
 </script>

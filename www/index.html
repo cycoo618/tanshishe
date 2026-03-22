@@ -147,6 +147,36 @@ canvas { display: block; }
 .pip.active { background: var(--cyan); box-shadow: 0 0 5px var(--cyan); }
 .pip.hot    { background: var(--magenta); box-shadow: 0 0 5px var(--magenta); }
 
+/* ── Control mode cards (selection screen) ── */
+.ctrl-cards {
+  display: flex; gap: 10px; width: 100%;
+}
+.ctrl-card {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: clamp(16px,5vw,24px) 10px;
+  cursor: pointer; transition: all 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ctrl-card:active, .ctrl-card.selected {
+  border-color: var(--cyan);
+  background: rgba(0,245,212,0.06);
+  box-shadow: 0 0 20px rgba(0,245,212,0.12);
+}
+.ctrl-card-icon {
+  font-size: clamp(28px,8vw,40px);
+  line-height: 1;
+}
+.ctrl-card-name {
+  font-size: clamp(9px,2.5vw,12px); font-weight: 700;
+  letter-spacing: 3px; color: var(--text);
+}
+.ctrl-card-desc {
+  font-size: clamp(6px,1.8vw,8px); letter-spacing: 1px;
+  color: var(--dim); text-align: center;
+}
+
 /* D-pad auto-sizes to fill available width proportionally */
 .dpad {
   display: grid;
@@ -165,6 +195,27 @@ canvas { display: block; }
 .dpad-btn:active { background: rgba(0,245,212,0.14); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,245,212,0.2); transform: scale(0.86); }
 .dpad-btn.center { font-size: clamp(7px,2.5vw,11px); color: var(--dim); }
 .dpad-btn.empty  { background: transparent; border: none; pointer-events: none; }
+
+/* ── Gesture zone ── */
+.gesture-zone {
+  display: none; /* shown in swipe mode */
+  align-items: center; justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--dim);
+  font-size: clamp(7px,2vw,9px); letter-spacing: 3px;
+  flex-direction: column; gap: 6px;
+  touch-action: none;
+}
+.gesture-zone .gz-arrows {
+  font-size: clamp(16px,5vw,24px);
+  opacity: 0.25;
+  letter-spacing: 4px;
+}
+.gesture-zone.active-flash {
+  border-color: var(--cyan);
+  background: rgba(0,245,212,0.04);
+}
 
 /* ══ Landscape layout ════════════════════════════ */
 @media (orientation: landscape) {
@@ -381,6 +432,23 @@ canvas { display: block; }
         <div class="lb-table" id="lbTable"></div>
         <button class="btn dim" id="lbCloseBtn">BACK</button>
       </div>
+
+      <!-- Control mode selection -->
+      <div class="overlay hidden" id="ctrlOverlay">
+        <div class="ov-title">HOW TO PLAY</div>
+        <div class="ctrl-cards">
+          <div class="ctrl-card" id="cardDpad">
+            <div class="ctrl-card-icon">🕹️</div>
+            <div class="ctrl-card-name">D-PAD</div>
+            <div class="ctrl-card-desc">TAP DIRECTION<br>BUTTONS</div>
+          </div>
+          <div class="ctrl-card" id="cardSwipe">
+            <div class="ctrl-card-icon">👆</div>
+            <div class="ctrl-card-name">SWIPE</div>
+            <div class="ctrl-card-desc">SWIPE ANYWHERE<br>ON SCREEN</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -389,14 +457,15 @@ canvas { display: block; }
     <!-- will contain headerEl in landscape -->
     <div id="bottomArea">
       <div class="speed-row">
-        <span>SPD</span>
-        <div class="pip-track">
-          <div class="pip" id="pip0"></div><div class="pip" id="pip1"></div>
-          <div class="pip" id="pip2"></div><div class="pip" id="pip3"></div>
-          <div class="pip" id="pip4"></div><div class="pip" id="pip5"></div>
-          <div class="pip" id="pip6"></div><div class="pip" id="pip7"></div>
+          <span>SPD</span>
+          <div class="pip-track">
+            <div class="pip" id="pip0"></div><div class="pip" id="pip1"></div>
+            <div class="pip" id="pip2"></div><div class="pip" id="pip3"></div>
+            <div class="pip" id="pip4"></div><div class="pip" id="pip5"></div>
+            <div class="pip" id="pip6"></div><div class="pip" id="pip7"></div>
+          </div>
         </div>
-      </div>
+      <!-- D-pad (shown in dpad mode) -->
       <div class="dpad" id="dpad">
         <div class="dpad-btn empty"></div>
         <div class="dpad-btn" id="dUp">▲</div>
@@ -407,6 +476,11 @@ canvas { display: block; }
         <div class="dpad-btn empty"></div>
         <div class="dpad-btn" id="dDown">▼</div>
         <div class="dpad-btn empty"></div>
+      </div>
+      <!-- Gesture zone placeholder (shown in swipe mode, same size as dpad) -->
+      <div id="gestureZone" style="display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1px dashed var(--border);border-radius:10px;color:var(--dim);font-size:clamp(7px,2vw,9px);letter-spacing:3px;">
+        <div style="font-size:clamp(18px,5vw,26px);opacity:0.2;letter-spacing:6px;">↑ ↓ ← →</div>
+        <span>SWIPE HERE</span>
       </div>
     </div>
   </div>
@@ -474,6 +548,8 @@ function resize(){
     sidebar.style.width=sideW+'px';
     const dpadSz=Math.min(sideW-8, 168);
     dpadEl.style.width=dpadSz+'px'; dpadEl.style.height=dpadSz+'px';
+    const gz=document.getElementById('gestureZone');
+    gz.style.width=dpadSz+'px'; gz.style.height=dpadSz+'px';
 
     const maxBoard=Math.min(vw-sideW-padH, vh-padV, 480);
     cellSize=Math.max(10,Math.floor(maxBoard/GRID));
@@ -493,23 +569,33 @@ function resize(){
     const dpadSz=Math.min(vw*0.42, 180, vh*0.28);
     dpadEl.style.width=dpadSz+'px'; dpadEl.style.height=dpadSz+'px';
 
-    // Canvas: remaining vertical space
+    // Canvas: remaining vertical space (always reserves dpad-sized space)
     const hdrH = headerEl.offsetHeight || 52;
-    const dpadH = dpadSz;
-    const pipsH = 22, gaps = 6+8+6+10; // various gaps+padding
-    const avH = vh - hdrH - dpadH - pipsH - gaps;
+    const pipsH = 22, gaps = 6+8+6+10;
+    const avH = vh - hdrH - dpadSz - pipsH - gaps;
     const avW = vw - 24;
     const maxBoard = Math.min(avH, avW, 480);
     cellSize=Math.max(10,Math.floor(maxBoard/GRID));
+
+    // Gesture zone: fill ALL bottom space below the canvas
+    // Use appEl.clientHeight (safe-area-aware) to avoid overflowing into header
+    const gz=document.getElementById('gestureZone');
+    const actualBoard=cellSize*GRID;
+    const usableH=appEl.clientHeight; // excludes iOS safe-area insets
+    // 50 = appPaddingTop(10) + appPaddingBottom(6) + bottomAreaPaddingTop(6) + speedRow(22) + gap(6)
+    const gzH=Math.max(dpadSz, usableH-50-hdrH-actualBoard);
+    gz.style.width=(vw-24)+'px'; gz.style.height=gzH+'px';
   }
 
   boardSize=cellSize*GRID;
   canvas.width=boardSize; canvas.height=boardSize;
   container.style.width=boardSize+'px'; container.style.height=boardSize+'px';
+  // Safety: canvasWrap must always fit the canvas so it never overflows into the header
+  canvasWrap.style.minHeight=boardSize+'px';
 }
 
 // ─── Screens ──────────────────────────────────────────────────────────────────
-const OVS=['homeOverlay','newPlayerOverlay','gameOverOverlay','lbOverlay'];
+const OVS=['homeOverlay','newPlayerOverlay','gameOverOverlay','lbOverlay','ctrlOverlay'];
 const showOnly=id=>OVS.forEach(s=>document.getElementById(s).classList.toggle('hidden',s!==id));
 const hideAll =()=>OVS.forEach(s=>document.getElementById(s).classList.add('hidden'));
 
@@ -562,7 +648,15 @@ function selectUser(name){
   document.getElementById('playerName').textContent=name;
   document.getElementById('playerTag').classList.add('on');
   document.getElementById('highscore').textContent=highScore;
-  startGame();
+  showCtrlSelection();
+}
+
+function showCtrlSelection(){
+  resize();
+  document.getElementById('cardDpad').classList.toggle('selected', controlMode==='dpad');
+  document.getElementById('cardSwipe').classList.toggle('selected', controlMode==='swipe');
+  showOnly('ctrlOverlay');
+  drawStaticBg();
 }
 
 // ─── Game ─────────────────────────────────────────────────────────────────────
@@ -808,13 +902,30 @@ document.getElementById('dLeft').addEventListener('click',()=>applyDir(-1,0));
 document.getElementById('dRight').addEventListener('click',()=>applyDir(1,0));
 document.getElementById('dPause').addEventListener('click',()=>{if(gameState==='playing'||gameState==='paused')togglePause();});
 
+// ─── Control mode ─────────────────────────────────────────────────────────────
+let controlMode = localStorage.getItem('serpent_ctrl') || 'dpad';
+
+function setControlMode(mode){
+  controlMode = mode;
+  localStorage.setItem('serpent_ctrl', mode);
+  dpadEl.style.display = mode==='dpad' ? '' : 'none';
+  document.getElementById('gestureZone').style.display = mode==='swipe' ? 'flex' : 'none';
+}
+
+document.getElementById('cardDpad').addEventListener('click', ()=>{ setControlMode('dpad'); startGame(); });
+document.getElementById('cardSwipe').addEventListener('click',()=>{ setControlMode('swipe'); startGame(); });
+
+// ─── Touch swipe（全屏手势操控）─────────────────────────────────────────────
 let lastTouch=null;
-canvas.addEventListener('touchstart',e=>{
+
+document.addEventListener('touchstart',e=>{
   lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
 },{passive:true});
-// 每次触发后从当前位置重新计算，不用抬手就能连续多次转向
-canvas.addEventListener('touchmove',e=>{
+
+document.addEventListener('touchmove',e=>{
   if(!lastTouch)return;
+  // D-pad 模式下只有 canvas 区域触发手势
+  if(controlMode==='dpad' && !e.target.closest('#game'))return;
   const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
   const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
   const threshold=14;
@@ -824,7 +935,8 @@ canvas.addEventListener('touchmove',e=>{
     if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};}
   }
 },{passive:true});
-canvas.addEventListener('touchend',e=>{lastTouch=null;},{passive:true});
+
+document.addEventListener('touchend',()=>{lastTouch=null;},{passive:true});
 
 document.getElementById('newPlayerBtn').addEventListener('click',showNewPlayer);
 document.getElementById('confirmNewBtn').addEventListener('click',confirmNewPlayer);
@@ -840,6 +952,7 @@ window.addEventListener('resize',()=>{resize();if(gameState==='home'||gameState=
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 resize();
+setControlMode(controlMode);
 drawStaticBg();
 showHome();
 </script>
