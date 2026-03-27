@@ -1633,42 +1633,42 @@ function setControlMode(mode){
 document.getElementById('cardDpad').addEventListener('click', ()=>{ setControlMode('dpad'); startGame(); });
 document.getElementById('cardSwipe').addEventListener('click',()=>{ setControlMode('swipe'); startGame(); });
 
-// ─── Touch swipe（全屏手势操控）─────────────────────────────────────────────
-let lastTouch=null, swipeStart=null, swipeMoved=false;
+// ─── Pointer swipe（触摸屏 + 触摸板 + 鼠标拖拽）─────────────────────────────
+let swipeStart=null, swipeMoved=false;
 
-document.addEventListener('touchstart',e=>{
-  const t=e.touches[0];
-  lastTouch=swipeStart={x:t.clientX,y:t.clientY};
-  swipeMoved=false;
-},{passive:true});
+function swipeTarget(e){
+  return controlMode!=='dpad' || (e.target&&e.target.closest('#game'));
+}
+function detectDir(dx,dy,threshold=10){
+  if(Math.abs(dx)>Math.abs(dy)){if(Math.abs(dx)>threshold)applyDir(dx>0?1:-1,0);}
+  else{if(Math.abs(dy)>threshold)applyDir(0,dy>0?1:-1);}
+}
 
-document.addEventListener('touchmove',e=>{
-  if(!lastTouch)return;
-  // D-pad 模式下只有 canvas 区域触发手势
-  if(controlMode==='dpad' && !e.target.closest('#game'))return;
-  e.preventDefault();
-  const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
-  const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
-  const threshold=10;
-  if(Math.abs(dx)>Math.abs(dy)){
-    if(Math.abs(dx)>threshold){applyDir(dx>0?1:-1,0);lastTouch={x:cx,y:cy};swipeMoved=true;}
-  } else {
-    if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};swipeMoved=true;}
-  }
-},{passive:false});
+document.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  swipeStart={x:e.clientX,y:e.clientY}; swipeMoved=false;
+});
+document.addEventListener('pointermove',e=>{
+  if(!swipeStart||!swipeTarget(e))return;
+  const dx=e.clientX-swipeStart.x,dy=e.clientY-swipeStart.y;
+  const prev=swipeMoved;
+  if(Math.abs(dx)>Math.abs(dy)){if(Math.abs(dx)>10){applyDir(dx>0?1:-1,0);swipeStart={x:e.clientX,y:e.clientY};swipeMoved=true;}}
+  else{if(Math.abs(dy)>10){applyDir(0,dy>0?1:-1);swipeStart={x:e.clientX,y:e.clientY};swipeMoved=true;}}
+});
+document.addEventListener('pointerup',e=>{
+  if(swipeStart&&!swipeMoved&&swipeTarget(e))
+    detectDir(e.clientX-swipeStart.x,e.clientY-swipeStart.y,14);
+  swipeStart=null; swipeMoved=false;
+});
+document.addEventListener('pointercancel',()=>{swipeStart=null;swipeMoved=false;});
 
-document.addEventListener('touchend',e=>{
-  // 快速滑动时 touchmove 可能未触发，在 touchend 兜底检测
-  if(!swipeMoved && swipeStart && e.changedTouches[0]){
-    const isCanvas=controlMode!=='dpad'||e.target.closest('#game');
-    if(isCanvas){
-      const cx=e.changedTouches[0].clientX,cy=e.changedTouches[0].clientY;
-      const dx=cx-swipeStart.x,dy=cy-swipeStart.y;
-      if(Math.abs(dx)>Math.abs(dy)){if(Math.abs(dx)>14)applyDir(dx>0?1:-1,0);}
-      else{if(Math.abs(dy)>14)applyDir(0,dy>0?1:-1);}
-    }
-  }
-  lastTouch=swipeStart=null; swipeMoved=false;
+// ─── Wheel（触摸板双指滑动）──────────────────────────────────────────────────
+let wheelLock=false;
+document.addEventListener('wheel',e=>{
+  if(wheelLock||!swipeTarget(e))return;
+  if(Math.abs(e.deltaX)<3&&Math.abs(e.deltaY)<3)return;
+  detectDir(e.deltaX,e.deltaY,0);
+  wheelLock=true; setTimeout(()=>{wheelLock=false;},200);
 },{passive:true});
 
 document.getElementById('newPlayerBtn').addEventListener('click',showNewPlayer);
