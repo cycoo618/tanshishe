@@ -1667,7 +1667,7 @@ let wheelLock=false;
 document.addEventListener('wheel',e=>{
   if(wheelLock||!swipeTarget(e))return;
   if(Math.abs(e.deltaX)<3&&Math.abs(e.deltaY)<3)return;
-  detectDir(e.deltaX,e.deltaY,0);
+  detectDir(-e.deltaX,-e.deltaY,0);
   wheelLock=true; setTimeout(()=>{wheelLock=false;},200);
 },{passive:true});
 
