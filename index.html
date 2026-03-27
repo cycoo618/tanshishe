@@ -126,7 +126,7 @@ body::before {
   box-shadow: var(--canvas-boxshadow);
   flex-shrink: 0;
 }
-canvas { display: block; }
+canvas { display: block; touch-action: none; }
 .canvas-container::after {
   content: ''; position: absolute; inset: 0;
   background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.035) 3px, rgba(0,0,0,0.035) 4px);
@@ -528,7 +528,7 @@ canvas { display: block; }
         <div class="dpad-btn empty"></div>
       </div>
       <!-- Gesture zone placeholder (shown in swipe mode, same size as dpad) -->
-      <div id="gestureZone" style="display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1px dashed var(--border);border-radius:10px;color:var(--dim);font-size:clamp(7px,2vw,9px);letter-spacing:3px;">
+      <div id="gestureZone" style="display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1px dashed var(--border);border-radius:10px;color:var(--dim);font-size:clamp(7px,2vw,9px);letter-spacing:3px;touch-action:none;">
         <div style="font-size:clamp(18px,5vw,26px);opacity:0.2;letter-spacing:6px;">↑ ↓ ← →</div>
         <span>SWIPE HERE</span>
       </div>
@@ -1646,15 +1646,16 @@ document.addEventListener('touchmove',e=>{
   if(!lastTouch)return;
   // D-pad 模式下只有 canvas 区域触发手势
   if(controlMode==='dpad' && !e.target.closest('#game'))return;
+  e.preventDefault();
   const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
   const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
-  const threshold=14;
+  const threshold=10;
   if(Math.abs(dx)>Math.abs(dy)){
     if(Math.abs(dx)>threshold){applyDir(dx>0?1:-1,0);lastTouch={x:cx,y:cy};swipeMoved=true;}
   } else {
     if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};swipeMoved=true;}
   }
-},{passive:true});
+},{passive:false});
 
 document.addEventListener('touchend',e=>{
   // 快速滑动时 touchmove 可能未触发，在 touchend 兜底检测
