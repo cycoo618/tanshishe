@@ -1634,10 +1634,12 @@ document.getElementById('cardDpad').addEventListener('click', ()=>{ setControlMo
 document.getElementById('cardSwipe').addEventListener('click',()=>{ setControlMode('swipe'); startGame(); });
 
 // ─── Touch swipe（全屏手势操控）─────────────────────────────────────────────
-let lastTouch=null;
+let lastTouch=null, swipeStart=null, swipeMoved=false;
 
 document.addEventListener('touchstart',e=>{
-  lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  const t=e.touches[0];
+  lastTouch=swipeStart={x:t.clientX,y:t.clientY};
+  swipeMoved=false;
 },{passive:true});
 
 document.addEventListener('touchmove',e=>{
@@ -1648,13 +1650,25 @@ document.addEventListener('touchmove',e=>{
   const dx=cx-lastTouch.x,dy=cy-lastTouch.y;
   const threshold=14;
   if(Math.abs(dx)>Math.abs(dy)){
-    if(Math.abs(dx)>threshold){applyDir(dx>0?1:-1,0);lastTouch={x:cx,y:cy};}
+    if(Math.abs(dx)>threshold){applyDir(dx>0?1:-1,0);lastTouch={x:cx,y:cy};swipeMoved=true;}
   } else {
-    if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};}
+    if(Math.abs(dy)>threshold){applyDir(0,dy>0?1:-1);lastTouch={x:cx,y:cy};swipeMoved=true;}
   }
 },{passive:true});
 
-document.addEventListener('touchend',()=>{lastTouch=null;},{passive:true});
+document.addEventListener('touchend',e=>{
+  // 快速滑动时 touchmove 可能未触发，在 touchend 兜底检测
+  if(!swipeMoved && swipeStart && e.changedTouches[0]){
+    const isCanvas=controlMode!=='dpad'||e.target.closest('#game');
+    if(isCanvas){
+      const cx=e.changedTouches[0].clientX,cy=e.changedTouches[0].clientY;
+      const dx=cx-swipeStart.x,dy=cy-swipeStart.y;
+      if(Math.abs(dx)>Math.abs(dy)){if(Math.abs(dx)>14)applyDir(dx>0?1:-1,0);}
+      else{if(Math.abs(dy)>14)applyDir(0,dy>0?1:-1);}
+    }
+  }
+  lastTouch=swipeStart=null; swipeMoved=false;
+},{passive:true});
 
 document.getElementById('newPlayerBtn').addEventListener('click',showNewPlayer);
 document.getElementById('skinsBtn').addEventListener('click',showSkins);
